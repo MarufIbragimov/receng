@@ -4,15 +4,28 @@ import pandas as pd
 import duckdb
 
 
-db_file = 'e_com_samples.duckdb'
+db_file = 'e_com_samples0005.duckdb'
 duck = duckdb.connect(db_file)
 
 # @st.cache_data(persist='disk')
-def get_users():
-    return users_rel
+def get_users(selected_date):
+    date_threshold = pd.to_datetime(selected_date) + pd.Timedelta(days = 1)
+    users = pd.read_parquet(
+            'data/reviews.parquet',
+            filters = [('review_timestamp', '<', date_threshold)]
+        ).sort_values(by='user_id')['user_id'].unique().tolist()
+
+    return users
 
 # @st.cache_data(persist='disk')
 def get_categories():
+    
+
+    categories_rel = duck.query("""
+        select *
+        from categories
+        order by category
+    """)
     return categories_rel
 
 def get_reviews2(selected_date):
@@ -20,9 +33,10 @@ def get_reviews2(selected_date):
     date_threshold = pd.to_datetime(selected_date) + pd.Timedelta(days = 1)
     reviews_df = (
         pd.read_parquet(
-            'data/reviews.parquet',
-            filters = [('review_timestamp', '<', date_threshold)]
+            'data/reviews_data.parquet',
+            filters = [('review_timestamp', '<', date_threshold)]#, ('category_id', 'in', categories)]
         )
+        # .query(f"category {'not' if len(categories)<1  else ''} in {categories}")
         .sort_values(by=['review_timestamp'])
         .drop_duplicates(subset = ['user_id', 'item_id'], keep='last')
         .assign(
@@ -81,65 +95,20 @@ def test_reviews(selected_date):
 def show_table(tbl):
     return duck.query(f"select * from {tbl}")
 
-def get_top_rated(user, categories, selected_date):
-    
-    filter_on_user = ''
-    if user != None:
-        filter_on_user = f'and user_id != {user}'
-    filter_on_categories = ''
-    if len(categories)==1:
-        filter_on_categories = f"where category = '{categories[0]}'"
-    elif len(categories)>1:
-        filter_on_categories = f"where category in {categories}"
 
-    reviews_df = get_reviews(selected_date)
-
-    top_items_query = f"""
-        with
-        selected_categories as (
-            select category_id
-            from categories
-            {filter_on_categories}
-        )
-        , selected_items as (
-            select item_id
-            from selected_categories sc
-                inner join items_info ii on sc.category_id = ii.category_id
-        )
-        , selected_reviews as (
-            select *
-            from reviews_df
-            where
-                item_id in (select item_id from selected_items)
-                {filter_on_user}
-        )
-        , tops as (
-            select
-                item_id
-                , avg(weighted_rating) as weighted_mean
-            from selected_reviews
-            group by item_id
-        )
-        select *
-        from tops
-            inner join items on tops.item_id = items.item_id
-        order by weighted_mean desc
-        limit 20
-    """
-    return duck.query(top_items_query).to_df()
-
-
-users_rel = duck.query("select user_id from users")
-
-categories_rel = duck.query("""
-    select *
-    from categories
-    order by category
-""")
-
-reviews_rel = duck.query(f"""
+def get_top_rated(user, reviews, items):
         
-    """)
+    tops_df = (
+        reviews.query(f"user_id {'==' if user != None else '!='} {user}")
+        .groupby(['item_id'], as_index=False).agg(weighted_mean = ('weighted_rating', 'mean'))
+        .sort_values(by=['weighted_mean'], ascending=False)
+        .head(20)
+        .merge(items, how='left', on='item_id')
+    )
+    return tops_df
+
+
+
 
 
 

@@ -22,11 +22,19 @@ def populate_columns(df, columns_cnt):
             st.write(item_row['title'].values[0][:50])    
 
 
+# название сервиса
 st.title('E-com')
 
-# with st.sidebar:
+#########################################################################################
+#########################################################################################
+# ФИЛЬТРЫ
+#########################################################################################
+#########################################################################################
 col1, col2, col3 = st.columns(3)
 
+#----------------------------------------------------------------------------------------
+# фильтр даты
+#----------------------------------------------------------------------------------------
 with col1:
     selected_date = st.date_input(
         label = 'select date',
@@ -35,73 +43,97 @@ with col1:
         max_value = max_date
     )
 
+reviews_df = etl.get_reviews2(selected_date)
+
+#----------------------------------------------------------------------------------------
+# фильтр категорий
+#----------------------------------------------------------------------------------------
+categories_lst = reviews_df['category'].sort_values().unique().tolist()
 with col2:
+    categories = st.multiselect(
+        label = 'select categories',
+        options = categories_lst
+    )
+
+filtered_df = reviews_df.query(f"category {'not' if len(categories)==0 else ''} in {categories}")
+
+#----------------------------------------------------------------------------------------
+# фильтр пользователей
+#----------------------------------------------------------------------------------------
+users = filtered_df['user_id'].sort_values().unique().tolist()
+items_df = pd.read_parquet(
+    'data/items.parquet',
+    filters=[('item_id', 'in', filtered_df['item_id'].unique().tolist())]
+)
+
+# st.write(categories)
+# # st.write(users)
+st.dataframe(filtered_df)
+
+with col3:
     user = st.selectbox(
         label = 'select user',
-        options = etl.get_users().to_df()['user_id'],
+        options = users, 
         index = None
     )
 
-with col3:
-    categories = st.multiselect(
-        label = 'select categories',
-        options = etl.get_categories().to_df()['category']
-    )
+#########################################################################################
+#########################################################################################
+# ВКЛАДКИ
+#########################################################################################
+#########################################################################################
 
-    # go = st.button('Go')
-
-
-# st.write(
-#     etl.test_reviews(selected_date).to_df()#.aggregate("user_id, item_id, count(*) as cnt").order("cnt desc")
-    
-# )
-# st.dataframe(
-#     etl.show_table('items_info')
-# )
+tab1, tab2, tab3 = st.tabs(['popular products', 'user-based recommendations', 'similar products'])
 
 
-# Custom CSS to inject
-
-st.markdown("""
-<style>
-
-	.stTabs [data-baseweb="tab-list"] {
-		gap: 20px;
-    }
-
-	.stTabs [data-baseweb="tab"] {
-		height: 50px;
-        white-space: pre-wrap;
-		#background-color: #F0F2F6;
-		border-radius: 4px 4px 0px 0px;
-		gap: 10px;
-		padding-top: 10px;
-		padding-bottom: 10px;
-    }
-
-	# .stTabs [aria-selected="true"] {
-  	# 	background-color: #FFFFFF;
-	# }
-
-</style>""", unsafe_allow_html=True)
-
-tab1, tab2, tab3 = st.tabs(['popular products', 'personal recommendations', 'similar products'])
-
-# if go:        
-    # st.write(min_date, max_date)
-    # st.header('Top 10 high-rated products')
-    # st.write(user)
-    # st.write(categories)
-
-
+#----------------------------------------------------------------------------------------
+# вкладка POPULAR PRODUCTS
+#----------------------------------------------------------------------------------------
 with tab1:
     # st.write(etl.get_top_rated(user, tuple(categories), selected_date))
-    top_rated = etl.get_top_rated(user, tuple(categories), selected_date)
+    # top_rated = etl.get_top_rated(user, tuple(categories), selected_date)
+    top_rated = etl.get_top_rated(user, filtered_df, items_df)
 
     populate_columns(top_rated.iloc[:5], 5)
     populate_columns(top_rated.iloc[5:10], 5)
     populate_columns(top_rated.iloc[10:15], 5)
     populate_columns(top_rated.iloc[15:20], 5)
 
+
+#----------------------------------------------------------------------------------------
+# вкладка USER-BASED RECOMMENDATIONS
+#----------------------------------------------------------------------------------------
 with tab2:
-    st.dataframe(user_based.ratings_matrice(selected_date))
+
+    # go = st.button(label = 'recommend')
+    
+    # if go:
+    st.write(categories)
+
+    # ratings_df = filtered_df.pivot_table(
+    #     index = 'user_id',
+    #     columns = 'item_id',
+    #     values = 'rating'
+    # )
+
+    # avg_ratings = ratings_df.mean(axis = 1)
+
+    # st.write(type(avg_ratings))
+
+    if user == None:
+        st.title("select a user")
+    else:
+        recommended_items = user_based.recommend(user, filtered_df)
+    
+        if len(recommended_items) > 0:
+            st.dataframe(recommended_items)
+            st.write(type(recommended_items))
+        else:
+            st.title("no similar users found")
+
+#----------------------------------------------------------------------------------------
+# вкладка SIMILAR PRODUCTS
+#----------------------------------------------------------------------------------------
+
+
+
