@@ -141,7 +141,7 @@ with col2:
 #########################################################################################
 #########################################################################################
 
-tab1, tab2, tab3 = st.tabs(['popular products', 'user-based recommendations', 'item-based recommendations'])
+tab1, tab2, tab3 = st.tabs(['Popular products', 'User-based recommendations', 'Item-based recommendations'])
 
 
 #----------------------------------------------------------------------------------------
