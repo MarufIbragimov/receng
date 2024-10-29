@@ -28,13 +28,14 @@ def get_categories():
     """)
     return categories_rel
 
-def get_reviews2(selected_date):
+def get_reviews2(selected_date, direction):
 
     date_threshold = pd.to_datetime(selected_date) + pd.Timedelta(days = 1)
+    
     reviews_df = (
         pd.read_parquet(
             'data/reviews_data.parquet',
-            filters = [('review_timestamp', '<', date_threshold)]#, ('category_id', 'in', categories)]
+            filters = [('review_timestamp', direction, date_threshold)]#, ('category_id', 'in', categories)]
         )
         # .query(f"category {'not' if len(categories)<1  else ''} in {categories}")
         .sort_values(by=['review_timestamp'])
@@ -99,7 +100,7 @@ def show_table(tbl):
 def get_top_rated(user, reviews, items):
         
     tops_df = (
-        reviews.query(f"user_id {'==' if user != None else '!='} {user}")
+        reviews.query(f"user_id!={user}") #{'!=' if user != None else '=='}
         .groupby(['item_id'], as_index=False).agg(weighted_mean = ('weighted_rating', 'mean'))
         .sort_values(by=['weighted_mean'], ascending=False)
         .head(20)
